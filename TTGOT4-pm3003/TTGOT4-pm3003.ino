@@ -1,117 +1,94 @@
+/*
+   Thank you : p0n3
+   https://p0n3.net/air-quality-sensor-first-tests/
 
-/***************************************************
-  This is our GFX example for the Adafruit ILI9341 Breakout and Shield
-  ----> http://www.adafruit.com/products/1651
-
-  Check out the links above for our tutorials and wiring diagrams
-  These displays use SPI to communicate, 4 or 5 pins are required to
-  interface (RST is optional)
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.
-  MIT license, all text above must be included in any redistribution
- ****************************************************/
-#define ILI9341_BLACK       0x0000  ///<   0,   0,   0
-#define ILI9341_NAVY        0x000F  ///<   0,   0, 123
-#define ILI9341_DARKGREEN   0x03E0  ///<   0, 125,   0
-#define ILI9341_DARKCYAN    0x03EF  ///<   0, 125, 123
-#define ILI9341_MAROON      0x7800  ///< 123,   0,   0
-#define ILI9341_PURPLE      0x780F  ///< 123,   0, 123
-#define ILI9341_OLIVE       0x7BE0  ///< 123, 125,   0
-#define ILI9341_LIGHTGREY   0xC618  ///< 198, 195, 198
-#define ILI9341_DARKGREY    0x7BEF  ///< 123, 125, 123
-#define ILI9341_BLUE        0x001F  ///<   0,   0, 255
-#define ILI9341_GREEN       0x07E0  ///<   0, 255,   0
-#define ILI9341_CYAN        0x07FF  ///<   0, 255, 255
-#define ILI9341_RED         0xF800  ///< 255,   0,   0
-#define ILI9341_MAGENTA     0xF81F  ///< 255,   0, 255
-#define ILI9341_YELLOW      0xFFE0  ///< 255, 255,   0
-#define ILI9341_WHITE       0xFFFF  ///< 255, 255, 255
-#define ILI9341_ORANGE      0xFD20  ///< 255, 165,   0
-#define ILI9341_GREENYELLOW 0xAFE5  ///< 173, 255,  41
-#define ILI9341_PINK        0xFC18  ///< 255, 130, 198
+*/
 
 #include "SPI.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
 
-// For the Adafruit shield, these are the default.
-//#define TFT_CLK 13
-//#define TFT_MISO 12
-//#define TFT_MOSI 11
-//#define TFT_DC 9
-//#define TFT_CS 10
-//#define TFT_RST 8
-// For the Adafruit shield, these are the default.
 #define TFT_DC 26
 #define TFT_CS 27
-// Use hardware SPI (on Uno, #13, #12, #11) and the above for CS/DC
+
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
-// If using the breakout, change pins as desired
-//Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
+
+#define RXD2 0
+#define TXD2 4
+#define NUMBER_OF_BYTE 23
+char line1[16], line2[16];
+unsigned char buffer [NUMBER_OF_BYTE];
+int PM25 = 0, PM10 = 0;
+int PM1, PM1a, PM25a, PM10a;
+
+uint32_t pevTime = 0;
+const long interval = 10 * 1000;
+
+bool checkValue(unsigned char *buf, int length)
+{
+  bool flag = 0;
+  int sum = 0;
+
+  for (int i = 0; i < (length - 2); i++)
+  {
+    sum += buf[i];
+  }
+  sum = sum + 0x42;
+
+  if (sum == ((buf[length - 2] << 8) + buf[length - 1]))
+  {
+    sum = 0;
+    flag = 1;
+  }
+  return flag;
+}
+
+void readPM3003() {
+  char fel = 0x42;
+  if (Serial1.find(&fel, 1)) {
+    Serial1.readBytes(buffer, NUMBER_OF_BYTE);
+  }
+
+  if (buffer[0] == 0x4d)
+  {
+    if (checkValue(buffer, NUMBER_OF_BYTE))
+    {
+      PM25 = ((buffer[5] << 8) + buffer[6]);
+      PM10 = ((buffer[7] << 8) + buffer[8]);
+
+      // rest of values (if you want to use it)
+      PM1 = ((buffer[3] << 8) + buffer[4]);
+      PM1a = ((buffer[9] << 8) + buffer[10]);
+      PM25a = ((buffer[11] << 8) + buffer[12]);
+      PM10a = ((buffer[13] << 8) + buffer[14]);
+    }
+  }
+}
 
 void setup() {
   Serial.begin(9600);
+  Serial1.begin(9600, SERIAL_8N1, RXD2, TXD2);
   Serial.println("ILI9341 Test!");
 
   tft.begin();
-
-  // read diagnostics (optional but can help debug problems)
-  uint8_t x = tft.readcommand8(ILI9341_RDMODE);
-  Serial.print("Display Power Mode: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDMADCTL);
-  Serial.print("MADCTL Mode: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDPIXFMT);
-  Serial.print("Pixel Format: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDIMGFMT);
-  Serial.print("Image Format: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDSELFDIAG);
-  Serial.print("Self Diagnostic: 0x"); Serial.println(x, HEX);
-
   tft.setRotation(3);
-  tft.fillScreen(ILI9341_BLACK);
 }
 
-uint32_t pevTime = 0;
+void loop() {
+  if (millis() - pevTime >= interval)
+  {
+    pevTime = millis();
+    readPM3003();
 
-void loop(void) {
-  uint32_t curTime = millis();
-  if (curTime - pevTime > 1000) {
-    pevTime = curTime;
-
-    testFastLines(ILI9341_RED, ILI9341_BLUE);
-    
-    //    tft.setCursor(0, 0);
-    //    tft.setTextColor(ILI9341_BLUE);
-    //    tft.setTextSize(3);
-    //    tft.println("PM2.5 Detector");
-    //
-    //    tft.setTextColor(ILI9341_YELLOW);
-    //    tft.setTextSize(3);
-    //    tft.setCursor(0, 50);
-    //    tft.println(1234.56);
-
-    //    tft.setTextColor(ILI9341_RED);    tft.setTextSize(3);
-    //    tft.println(0xDEADBEEF, HEX);
-    //    tft.println();
-
-    //    tft.setTextColor(ILI9341_GREEN);
-    //    tft.setTextSize(5);
-    //    tft.println("Groop");
-    //
-    //    tft.setTextSize(2);
-    //    tft.println("I implore thee,");
-    //
-    //    tft.setTextSize(1);
-    //    tft.println("my foonting turlingdromes.");
-    //    tft.println("And hooptiously drangle me");
-    //    tft.println("with crinkly bindlewurdles,");
-    //    tft.println("Or I will rend thee");
-    //    tft.println("in the gobberwarts");
-    //    tft.println("with my blurglecruncheon,");
-    //    tft.println("see if I don't!");
+    Serial.print("pm1 atmosphere: "); Serial.println(PM1a);
+    Serial.print("pm2.5 atmosphere: "); Serial.println(PM25a);
+    Serial.print("pm10 atmosphere: "); Serial.println(PM10a);
+    Serial.println();
+    Serial.print("pm1: "); Serial.println(PM1);
+    Serial.print("pm2.5: "); Serial.println(PM25);
+    Serial.print("pm10: "); Serial.println(PM10);
+    Serial.println();
+    Serial.println();
   }
 }
 
